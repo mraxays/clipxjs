@@ -1,5 +1,5 @@
 ![License](https://img.shields.io/badge/License-MIT-ff932e)
-![Release](https://img.shields.io/github/v/release/MrAkshayAS/clipxjs?color=ff7a5e)
+![Release](https://img.shields.io/github/v/release/mraxays/clipxjs?color=ff7a5e)
 
 # ClipX.js -Maximize Clipboard Power with Minimal Size
 
