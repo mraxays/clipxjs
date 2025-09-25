@@ -9,7 +9,7 @@ ClipX.js is an ultra-light JavaScript library that simplifies clipboard tasks an
 
 ## Official Website
 
-For more information about this project, please visit our official website: [ClipX](https://clipx.dzr.app/)
+For more information about this project, please visit our official website: [ClipX](https://clipx.js.org/)
 
 ---
 
