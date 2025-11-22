@@ -1,3 +1,10 @@
+/* 
+    ClipX JS
+    https://clipx.dzr.app
+    Version: 1.2.0
+    Copyright (c) 2024 Mr Akshay Shinde
+    Licensed under the MIT license
+*/
 (function (global) {
   // Constructor for the clipx object
   function clipx() {
@@ -272,4 +279,5 @@
     }
 }`;
   document.head.appendChild(style);
+
 })(this);
