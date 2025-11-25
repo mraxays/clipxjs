@@ -1,6 +1,6 @@
 /* 
     ClipX JS
-    https://clipx.dzr.app
+    https://clipx.js.org
     Version: 1.2.0
     Copyright (c) 2024 Mr Akshay Shinde
     Licensed under the MIT license
@@ -281,3 +281,4 @@
   document.head.appendChild(style);
 
 })(this);
+
