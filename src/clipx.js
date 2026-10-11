@@ -1,284 +1,229 @@
-/* 
-    ClipX JS
-    https://clipx.js.org
-    Version: 1.2.0
-    Copyright (c) 2024 Mr Akshay Shinde
-    Licensed under the MIT license
-*/
-(function (global) {
-  // Constructor for the clipx object
-  function clipx() {
-    this.attach = this.attach.bind(this); // Bind the attach method to the instance
-    this.isProcessing = false; // Flag to prevent multiple executions
-    // Global flags to disable specific features
-    this.disable = {
-      msg: false,
-      toast: false,
+/*! ClipX JS v1.3.0 | MIT | https://clipx.js.org */
+(function (g, f) {
+  var c = f();
+  if (typeof module == "object" && module.exports) module.exports = c;
+  if (typeof window != "undefined") window.clipx = window.ClipX = c;
+})(this, function () {
+  "use strict";
+  var D = typeof document != "undefined" && document,
+    nav = typeof navigator != "undefined" ? navigator : {},
+    SEL = "[data-clipx-text],[data-clipx-target],[data-clipx-paste]",
+    svg = (fill, d) =>
+      '<svg class="clipx-js-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="' + fill +
+      '" aria-hidden="true"><path fill-rule="evenodd" d="' + d + '"/></svg>',
+    ICON = {
+      ok: svg("#00d241", "M12 2a10 10 0 100 20 10 10 0 000-20zm-1 14.4-4-4 1.4-1.4 2.6 2.6 5.6-5.6L18 9.4z"),
+      err: svg("#e70000", "M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2zm0-4h-2V7h2z"),
+    },
+    CSS =
+      ".clipx-toast{font:14px system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;position:fixed;left:50%;transform:translateX(-50%);background:#fff;color:#363636;padding:8px 10px;border-radius:8px;z-index:9999;box-shadow:0 3px 10px rgba(0,0,0,.1),0 3px 3px rgba(0,0,0,.05);opacity:0;transition:opacity .3s;max-width:90%;display:flex;align-items:center;gap:5px;pointer-events:none}" +
+      ".clipx-show{opacity:1}.clipx-toast.top{top:20px}.clipx-toast.bottom{bottom:20px}.clipx-toast.error{background:#f8d7da;color:#721c24}" +
+      "@media(prefers-reduced-motion:reduce){.clipx-toast{transition:none}}",
+    rm = (n) => n && n.parentNode && n.parentNode.removeChild(n),
+    isV = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName),
+    get = (e) => (isV(e) ? e.value : e.textContent),
+    fire = (e, n, d) =>
+      e.dispatchEvent(d ? new CustomEvent(n, { bubbles: true, detail: d }) : new Event(n, { bubbles: true })),
+    set = (e, t) => {
+      if (isV(e)) {
+        e.value = t;
+        fire(e, "input");
+        fire(e, "change");
+      } else e.textContent = t;
+    },
+    legacy = (t) =>
+      new Promise((ok, no) => {
+        var a = D.activeElement, x = D.createElement("textarea"), r = false;
+        x.value = t;
+        x.readOnly = true;
+        x.style.cssText = "position:fixed;top:0;opacity:0";
+        D.body.appendChild(x);
+        x.select();
+        try {
+          x.setSelectionRange(0, t.length);
+          r = D.execCommand("copy");
+        } catch (e) {}
+        rm(x);
+        a && a.focus && a.focus();
+        r ? ok() : no(Error("Copy failed"));
+      }),
+    FMT = {
+      trim: (s) => s.trim(),
+      uppercase: (s) => s.toUpperCase(),
+      lowercase: (s) => s.toLowerCase(),
+      capitalize: (s) => s.charAt(0).toUpperCase() + s.slice(1),
+      titlecase: (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()),
+      collapse: (s) => s.replace(/\s+/g, " "),
+      singleline: (s) => s.replace(/\s*[\r\n]+\s*/g, " "),
+      striphtml: (s) => s.replace(/<[^>]*>/g, ""),
     };
-    this.customStyles = {}; // Store custom styles for the toast notifications
-  }
 
-  // Method to copy text to clipboard
-  clipx.prototype.copyText = function (text) {
-    if (navigator.clipboard) {
-      // Use the Clipboard API if available
-      return navigator.clipboard.writeText(text);
-    } else if (navigator.permissions) {
-      // Check permissions if Clipboard API is not available
-      return navigator.permissions
-        .query({ name: "clipboard-write" })
-        .then(function (permissionStatus) {
-          if (
-            permissionStatus.state === "granted" ||
-            permissionStatus.state === "prompt"
-          ) {
-            return navigator.clipboard.writeText(text);
-          } else {
-            throw new Error("Clipboard write permission denied.");
-          }
-        });
-    } else {
-      // Fallback to using a temporary textarea element for older browsers
-      var textArea = document.createElement("textarea");
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textArea);
-      return Promise.resolve();
-    }
+  function clipx() {
+    this.disable = { msg: false, toast: false };
+    this.customStyles = {};
+    this.formatters = Object.assign({}, FMT);
+    this._sel = [];
+    this._fn = null;
+    this._t = {};
+  }
+  var P = clipx.prototype;
+  clipx.version = "1.3.0";
+
+  P.addFormatter = function (n, f) {
+    if (typeof f != "function") throw new TypeError("Formatter must be a function");
+    this.formatters[String(n).toLowerCase()] = f;
+    return this;
+  };
+  P.format = function (t, spec) {
+    t = t == null ? "" : String(t);
+    (Array.isArray(spec) ? spec : String(spec || "").split(",")).forEach((n) => {
+      n = String(n).trim().toLowerCase();
+      var f = this.formatters[n];
+      if (f) t = String(f(t));
+      else if (n) console.warn("ClipX: unknown format '" + n + "'");
+    });
+    return t;
   };
 
-  // Method to cut (copy and then clear) text from an element
-  clipx.prototype.cutText = function (text, element) {
-    return this.copyText(text).then(function () {
-      if (element) {
-        element.value = ""; // Clear value for input elements
-        element.textContent = ""; // Clear text content for non-input elements
-      }
+  P.copyText = function (t) {
+    t = t == null ? "" : String(t);
+    return nav.clipboard && nav.clipboard.writeText
+      ? nav.clipboard.writeText(t).catch(() => legacy(t))
+      : legacy(t);
+  };
+  P.cutText = function (t, e) {
+    return this.copyText(t).then(() => {
+      e && set(e, "");
+    });
+  };
+  P.copyFromElement = function (e, f) {
+    var t = this.format(get(e), f);
+    return t ? this.copyText(t) : Promise.reject(Error("Nothing to copy."));
+  };
+  P.cutFromElement = function (e, f) {
+    var t = this.format(get(e), f);
+    return t ? this.cutText(t, e) : Promise.reject(Error("Nothing to copy."));
+  };
+  P.pasteText = function () {
+    return nav.clipboard && nav.clipboard.readText
+      ? nav.clipboard.readText()
+      : Promise.reject(Error("Paste is not supported here."));
+  };
+  P.pasteToElement = function (e, f) {
+    return this.pasteText().then((t) => {
+      t = this.format(t, f);
+      set(e, t);
+      return t;
     });
   };
 
-  // Method to copy text from an element
-  clipx.prototype.copyFromElement = function (element) {
-    var text = element.value || element.textContent; // Get text from input or non-input element
-    return this.copyText(text);
-  };
-
-  // Method to cut (copy and then clear) text from an element
-  clipx.prototype.cutFromElement = function (element) {
-    var text = element.value || element.textContent; // Get text from input or non-input element
-    return this.cutText(text, element);
-  };
-
-  // Method to attach event listeners to elements matching the selector
-  clipx.prototype.attach = function (selector) {
-    var elements = document.querySelectorAll(selector);
-    elements.forEach(
-      function (element) {
-        element.addEventListener(
-          "click",
-          function () {
-            if (this.isProcessing) return; // Prevent multiple executions
-            this.isProcessing = true;
-
-            var targetSelector = element.getAttribute("data-clipx-target");
-            var text = element.getAttribute("data-clipx-text");
-            var cut = element.hasAttribute("data-clipx-cut");
-            var msgType = element.getAttribute("data-clipx-msg");
-            var toastOnly = element.hasAttribute("data-clipx-toast");
-            var disableMsg = element.hasAttribute("data-clipx-disable-msg");
-            var disableToast = element.hasAttribute("data-clipx-disable-toast");
-            var toastPosition =
-              element.getAttribute("data-clipx-toast-position") || "bottom";
-            var contentDuration =
-              parseInt(element.getAttribute("data-clipx-duration"), 10) || 1500;
-
-            var actionPromise;
-
-            // Determine the action based on attributes
-            if (targetSelector) {
-              var targetElement = document.querySelector(targetSelector);
-              if (targetElement) {
-                actionPromise = cut
-                  ? this.cutFromElement(targetElement)
-                  : this.copyFromElement(targetElement);
-              }
-            } else if (text) {
-              actionPromise = cut ? this.cutText(text) : this.copyText(text);
-            }
-
-            if (actionPromise) {
-              actionPromise
-                .then(() =>
-                  this.onSuccess(
-                    element,
-                    msgType,
-                    toastOnly,
-                    disableMsg,
-                    disableToast,
-                    toastPosition,
-                    contentDuration
-                  )
-                )
-                .catch((err) => this.onError(element, err))
-                .finally(() => {
-                  this.isProcessing = false;
-                });
-            }
-          }.bind(this)
-        );
-      }.bind(this)
-    );
-  };
-
-  // Handle successful copy/cut operation
-  clipx.prototype.onSuccess = function (
-    element,
-    msgType,
-    toastOnly,
-    disableMsg,
-    disableToast,
-    toastPosition,
-    contentDuration
-  ) {
-    var originalText = element.textContent; // Store original text content
-    var customMessage = msgType || "Copied !"; // Use provided message or default to "Copied!"
-    var toastClass =
-      toastPosition === "top" ? "clipx-toast top" : "clipx-toast bottom";
-
-    if (!toastOnly && !disableMsg && !this.disable.msg) {
-      element.textContent = customMessage; // Update element's text content
-    }
-
-    if (!disableToast && !this.disable.toast) {
-      var toast = document.createElement("div");
-      toast.className = toastClass;
-      // Insert the success SVG icon along with the custom message
-      var successSVG = `<svg class="clipx-js-svg-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="rgba(0,210,65,1)" fill="currentColor"><path d="M4 12C4 7.58172 7.58172 4 12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12ZM12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2ZM17.4571 9.45711L16.0429 8.04289L11 13.0858L8.20711 10.2929L6.79289 11.7071L11 15.9142L17.4571 9.45711Z"></path></svg>`;
-      toast.innerHTML = successSVG + customMessage;
-      toast.setAttribute("role", "alert");
-      toast.setAttribute("aria-live", "assertive");
-      toast.style.cssText = this.customStyles.toast || ""; // Apply custom styles if any
-
-      document.body.appendChild(toast);
-
-      // Fade-in and fade-out animation
-      toast.style.opacity = 0;
-      setTimeout(() => (toast.style.opacity = 1), 0);
-
-      setTimeout(
-        function () {
-          toast.style.opacity = 0;
-          setTimeout(() => document.body.removeChild(toast), 500);
-
-          if (!toastOnly && !disableMsg && !this.disable.msg) {
-            element.textContent = originalText; // Restore original text content
-          }
-        }.bind(this),
-        contentDuration
+  P.attach = function (s) {
+    if (!D) return this;
+    s = s || SEL;
+    this._sel.indexOf(s) < 0 && this._sel.push(s);
+    this._fn ||
+      D.addEventListener(
+        "click",
+        (this._fn = (e) => {
+          var n = e.target;
+          n && n.nodeType != 1 && (n = n.parentElement);
+          n = n && n.closest && n.closest(this._sel.join(","));
+          n && this._run(n);
+        })
       );
-    } else {
-      setTimeout(
-        function () {
-          if (!this.disable.msg) {
-            element.textContent = originalText; // Restore original text content
-          }
-        }.bind(this),
-        contentDuration
-      );
-    }
+    return this;
+  };
+  P.detach = function () {
+    this._fn && D.removeEventListener("click", this._fn);
+    this._fn = null;
+    this._sel = [];
+    return this;
   };
 
-  // Handle errors during copy/cut operation
-  clipx.prototype.onError = function (element, err) {
-    console.error("Failed to cut/copy text: ", err);
-    var toast = document.createElement("div");
-    toast.className = "clipx-toast error";
-    // Insert the error SVG icon along with the error message
-    var errorSVG = `<svg xmlns="http://www.w3.org/2000/svg" class="clipx-js-svg-icon" viewBox="0 0 24 24" width="16" height="16" fill="rgba(231,0,0,1)" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM11 15H13V17H11V15ZM11 7H13V13H11V7Z"></path></svg>`;
-    toast.innerHTML = errorSVG + "Failed to copy!";
-    toast.setAttribute("role", "alert");
-    toast.setAttribute("aria-live", "assertive");
-    toast.style.cssText = this.customStyles.toast || "";
+  P._run = function (el) {
+    if (el.__cx) return;
+    var a = (n) => el.getAttribute("data-clipx-" + n),
+      h = (n) => el.hasAttribute("data-clipx-" + n),
+      fm = a("format"), cut = h("cut"), ty = "copy", p, s,
+      d = parseInt(a("duration"), 10);
+    try {
+      if (a("paste")) {
+        ty = "paste";
+        if (!(s = D.querySelector(a("paste")))) throw Error("Paste target not found");
+        p = this.pasteToElement(s, fm);
+      } else if (a("target")) {
+        if (!(s = D.querySelector(a("target")))) throw Error("Target not found");
+        ty = cut ? "cut" : "copy";
+        p = cut ? this.cutFromElement(s, fm) : this.copyFromElement(s, fm);
+      } else if (h("text")) {
+        if (!(s = this.format(a("text"), fm))) throw Error("Nothing to copy.");
+        p = this.copyText(s);
+      } else throw Error("Add data-clipx-target, -text or -paste");
+    } catch (err) {
+      return this.onError(el, err);
+    }
+    el.__cx = 1;
+    p.then(
+      () => this.onSuccess(el, a("msg"), h("toast"), h("disable-msg"), h("disable-toast"), a("toast-position") || "bottom", d > 0 ? d : 1500, ty),
+      (err) => this.onError(el, err)
+    ).then(() => {
+      el.__cx = 0;
+    });
+  };
 
-    document.body.appendChild(toast);
+  P.onSuccess = function (el, msg, only, noMsg, noToast, pos, dur, ty) {
+    msg = msg || (ty == "paste" ? "Pasted!" : "Copied!");
+    if (!only && !noMsg && !this.disable.msg) {
+      if (el.__o === undefined) el.__o = el.innerHTML;
+      el.textContent = msg;
+      clearTimeout(el.__t);
+      el.__t = setTimeout(() => {
+        el.innerHTML = el.__o;
+        el.__o = undefined;
+      }, dur);
+    }
+    noToast || this.disable.toast || this._toast(msg, "ok", pos, dur);
+    fire(el, "clipx:success", { type: ty || "copy" });
+  };
+  P.onError = function (el, e) {
+    console.error("ClipX:", e);
+    this.disable.toast ||
+      this._toast(e && e.message == "Nothing to copy." ? e.message : "Failed to copy!", "err", "bottom", 1500);
+    fire(el, "clipx:error", { error: e });
+  };
+
+  P._toast = function (m, k, pos, dur) {
+    if (!D.getElementById("clipx-js-styles")) {
+      var s = D.createElement("style");
+      s.id = "clipx-js-styles";
+      s.textContent = CSS;
+      (D.head || D.documentElement).appendChild(s);
+    }
+    pos = pos == "top" ? "top" : "bottom";
+    rm(this._t[pos]);
+    var t = D.createElement("div"), l = D.createElement("span");
+    t.className = "clipx-toast " + pos + (k == "err" ? " error" : "");
+    t.setAttribute("role", k == "err" ? "alert" : "status");
+    t.innerHTML = ICON[k];
+    l.textContent = m;
+    t.appendChild(l);
+    t.style.cssText = (this.customStyles.toast || "") + ";" + (k == "err" ? this.customStyles.error || "" : "");
+    D.body.appendChild(t);
+    this._t[pos] = t;
+    setTimeout(() => t.classList.add("clipx-show"), 10);
     setTimeout(() => {
-      toast.style.opacity = 0;
-      setTimeout(() => document.body.removeChild(toast), 500);
-    }, 1500);
+      t.classList.remove("clipx-show");
+      setTimeout(() => {
+        rm(t);
+        if (this._t[pos] == t) this._t[pos] = null;
+      }, 300);
+    }, dur);
   };
 
-  // Method to set custom styles for toast notifications
-  clipx.prototype.setCustomStyles = function (styles) {
-    this.customStyles = styles;
+  P.setCustomStyles = function (s) {
+    this.customStyles = s || {};
+    return this;
   };
-
-  // Expose the clipx constructor to the global object
-  global.clipx = clipx;
-
-  // Add default styles for toast notifications
-  var style = document.createElement("style");
-  style.textContent = `
-        .clipx-toast {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: #fff;
-    color: #363636;
-    padding: 8px 10px;
-    border-radius: 8px;
-    z-index: 9999;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1), 0 3px 3px rgba(0, 0, 0, 0.05);
-    font-size: 14px;
-    text-align: center;
-    opacity: 0;
-    animation: fadeIn 0.5s ease forwards;
-    transition: opacity 0.5s ease;
-    max-width: 90%; /* Ensure it fits well on smaller screens */
-    width: auto; /* Ensure the width adjusts based on content */
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.clipx-toast.top {
-    top: 20px;
-    bottom: auto;
-}
-
-.clipx-toast.bottom {
-    bottom: 20px;
-}
-
-.clipx-toast.error {
-    background-color: #f8d7da;
-    color: #721c24;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px) translateX(-50%);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) translateX(-50%);
-    }
-}
-
-@keyframes fadeOut {
-    from {
-        opacity: 1;
-        transform: translateY(0) translateX(-50%);
-    }
-    to {
-        opacity: 0;
-        transform: translateY(10px) translateX(-50%);
-    }
-}`;
-  document.head.appendChild(style);
-
-})(this);
-
+  clipx.ClipX = clipx;
+  return clipx;
+});

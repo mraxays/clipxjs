@@ -1,117 +1,165 @@
-# ClipX Attributes Documentation
+![License](https://img.shields.io/badge/License-MIT-ff932e)
+![Release](https://img.shields.io/github/v/release/mraxays/clipxjs?color=ff7a5e)
 
-This documentation provides details on the attributes used with the ClipX library for clipboard operations. Each attribute has a specific use case to enhance clipboard functionality.
+# ClipX.js
 
-## Attributes Overview
+A lightweight JavaScript library for clipboard management, text formatting and user feedback. Copy, cut and paste with simple HTML data attributes, optionally format the text first, and get customizable toast notifications built in. No dependencies.
 
-## This All Are Attributes
-- **`data-clipx-target`**: Element selector for text source.
-- **`data-clipx-text`**: Static text to copy or cut.
-- **`data-clipx-cut`**: Toggle cut operation.
-- **`data-clipx-msg`**: Custom success message.
-- **`data-clipx-toast`**: Show only toast, no text change.
-- **`data-clipx-disable-msg`**: Disable element text change.
-- **`data-clipx-disable-toast`**: Disable toast notification.
-- **`data-clipx-toast-position`**: Position of the toast (top/bottom).
-- **`data-clipx-duration`**: Duration of toast visibility.
+Website: [clipx.js.org](https://clipx.js.org/)
 
----
+## Features
 
+- **Copy, cut and paste** from elements or static text
+- **Text formatting** (`trim`, `uppercase`, `titlecase`, …) with support for your own formatters
+- **Toast notifications** with custom messages, position, duration and styles
+- **Event delegation**: works for elements added after page load
+- **Events**: `clipx:success` and `clipx:error` on the clicked element
+- **Fallback copy** via `execCommand` when the Clipboard API is unavailable
 
-## Example 
+## Installation
 
-### `data-clipx-target`
-
-**Description:** Specifies the target element whose text will be copied to the clipboard when the button is clicked.
-
-**Example:**
-```html
-<button class="copy-btn" data-clipx-target="#text-to-copy">Copy Text</button>
-<p id="text-to-copy">This is the text to be copied.</p>
+```bash
+npm i clipxjs
 ```
 
-### `data-clipx-text`
+Or use a CDN (one is enough):
 
-**Description:** Defines a static text string that will be copied to the clipboard when the button is clicked.
-
-**Example:**
 ```html
-<button class="copy-btn" data-clipx-text="Static text to copy">Copy Static Text</button>
+<script src="https://cdn.jsdelivr.net/npm/clipxjs/dist/clipx.min.js"></script>
+<script src="https://unpkg.com/clipxjs/dist/clipx.min.js"></script>
 ```
 
-### `data-clipx-cut`
+## Quick start
 
-**Description:** Cuts the text from the specified element, copying it to the clipboard and clearing the element's content.
-
-**Example:**
 ```html
-<textarea id="text-to-cut">This text will be cut.</textarea>
-<button class="copy-btn" data-clipx-target="#text-to-cut" data-clipx-cut>Cut Text</button>
+<input id="name" value="Hello world">
+<button data-clipx-target="#name">Copy</button>
+<button data-clipx-target="#name" data-clipx-cut>Cut</button>
+<button data-clipx-paste="#name">Paste</button>
+<button data-clipx-text="Static text" data-clipx-msg="Done!">Copy text</button>
+
+<script src="https://cdn.jsdelivr.net/npm/clipxjs/dist/clipx.min.js"></script>
+<script>
+  var clipx = new ClipX();
+  clipx.attach(); // matches [data-clipx-text], [data-clipx-target], [data-clipx-paste]
+</script>
 ```
 
-### `data-clipx-msg`
+`new clipx()` also works, and `ClipX` is an alias that avoids shadowing the constructor.
 
-**Description:** Copies the specified text to the clipboard and shows a toast notification with a custom message.
+## Configuration
 
-**Example:**
-```html
-<button class="copy-btn" data-clipx-text="Another static text" data-clipx-msg="Text copied successfully!">Copy with Custom Message</button>
+```js
+clipx.disable.msg = true;   // never change the button text
+clipx.disable.toast = true; // never show toasts
+
+clipx.setCustomStyles({
+  toast: "background:#333;color:#fff;padding:12px;border-radius:5px;", // all toasts
+  error: "background:#7a1f1f;",                                        // extra styles for error toasts
+});
+
+clipx.attach(".copy-btn, .your-class"); // custom selectors; safe to call more than once
+clipx.detach();                          // remove listeners
 ```
 
-### `data-clipx-toast`
+Hide the toast icon:
 
-**Description:** Displays a toast notification with the copied text. The button text remains unchanged.
-
-**Example:**
-```html
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-toast>Copy with Toast Only</button>
+```css
+.clipx-js-svg-icon { display: none; }
 ```
 
-### `data-clipx-disable-msg`
+## Attributes
 
-**Description:** Shows a toast notification without changing the button's text content.
+| Attribute | Description |
+| --- | --- |
+| `data-clipx-target` | Selector of the element to copy (or cut) from |
+| `data-clipx-text` | Static text to copy |
+| `data-clipx-paste` | Selector of the element to paste into |
+| `data-clipx-cut` | Clear the target after copying (only with `data-clipx-target`) |
+| `data-clipx-format` | Comma-separated formatters applied before copy or paste |
+| `data-clipx-msg` | Custom success message (default `Copied!` / `Pasted!`) |
+| `data-clipx-toast` | Show only the toast; leave the button text unchanged |
+| `data-clipx-disable-msg` | Don't change the button text |
+| `data-clipx-disable-toast` | Don't show the toast |
+| `data-clipx-toast-position` | `top` or `bottom` (default) |
+| `data-clipx-duration` | Milliseconds the message stays visible (default `1500`) |
 
-**Example:**
+Priority when several are present: `data-clipx-paste`, then `data-clipx-target`, then `data-clipx-text`.
+
+### Examples
+
 ```html
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-disable-msg>Copy with Toast Only, No Text Change</button>
+<!-- Copy from an element -->
+<p id="t">Text to copy</p>
+<button data-clipx-target="#t">Copy</button>
+
+<!-- Cut -->
+<textarea id="c">Cut me</textarea>
+<button data-clipx-target="#c" data-clipx-cut>Cut</button>
+
+<!-- Paste, formatted -->
+<textarea id="p"></textarea>
+<button data-clipx-paste="#p" data-clipx-format="trim,uppercase">Paste</button>
+
+<!-- Toast only, on top, for 3 seconds -->
+<button data-clipx-text="Hi" data-clipx-toast data-clipx-toast-position="top" data-clipx-duration="3000">Copy</button>
+
+<!-- Silent copy -->
+<button data-clipx-text="Hi" data-clipx-disable-toast data-clipx-disable-msg>Copy</button>
 ```
 
-###  `USE data-clipx-disable-toast & data-clipx-disable-msg`
+## Formatting
 
-**Description:** Copies the specified text to the clipboard without showing a toast notification And Changing Text Contents.
+Built-in formatters for `data-clipx-format` (applied left to right):
 
-**Example:**
-```html
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-disable-toast data-clipx-disable-msg>Copy without Toast & with Change Text</button>
+`trim` · `uppercase` · `lowercase` · `capitalize` · `titlecase` · `collapse` (merge whitespace) · `singleline` (remove line breaks) · `striphtml`
+
+Add your own:
+
+```js
+clipx.addFormatter("reverse", function (s) { return s.split("").reverse().join(""); });
+// <button data-clipx-text="abc" data-clipx-format="reverse">
 ```
 
-### `data-clipx-disable-toast`
+## JavaScript API
 
-**Description:** Copies the specified text to the clipboard without showing a toast notification.
+All methods return Promises.
 
-**Example:**
-```html
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-disable-toast>Copy without Toast</button>
+```js
+clipx.copyText("hello");
+clipx.cutText("hello", element);             // copy, then clear element
+clipx.copyFromElement(element, "trim");      // optional format
+clipx.cutFromElement(element, "trim");
+clipx.pasteText();                           // resolves with clipboard text
+clipx.pasteToElement(element, "uppercase");
+clipx.format("  hi ", "trim,uppercase");     // synchronous, returns a string
 ```
 
-### `data-clipx-toast-position`
+## Events
 
-**Description:** Defines the position of the toast notification (top or bottom).
-
-**Example:**
-```html
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-toast data-clipx-toast-position="top">Copy with Toast on Top</button>
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-toast data-clipx-toast-position="bottom">Copy with Toast on Bottom</button>
+```js
+document.addEventListener("clipx:success", function (e) {
+  console.log(e.target, e.detail.type); // "copy" | "cut" | "paste"
+});
+document.addEventListener("clipx:error", function (e) {
+  console.log(e.detail.error);
+});
 ```
 
-### `data-clipx-duration`
+## Notes
 
-**Description:** Sets the duration (in milliseconds) for which the toast notification is visible before it fades out.
+- The Clipboard API needs a secure context (HTTPS or `localhost`). Copy falls back to `execCommand` elsewhere.
+- **Paste** uses `navigator.clipboard.readText()`, which requires HTTPS, a user click, and usually a browser permission prompt. Support and prompts vary by browser.
+- Toast messages are inserted as plain text, so `data-clipx-msg` can't inject HTML.
+- Static text (`data-clipx-text`) can only be copied; "cut" has nothing to clear.
 
-**Example:**
-```html
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-toast data-clipx-duration="3000">Copy with 3 Seconds Toast</button>
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-duration="3000">Copy with 3 Seconds Toast & Content Change</button>
-<button class="copy-btn" data-clipx-text="Text to copy" data-clipx-disable-toast data-clipx-duration="3000">Copy 3 sec Content Change</button>
-```
----
+## Upgrading from 1.2.x
+
+- Default message is now `Copied!` (no space).
+- `setCustomStyles` accepts an optional `error` key.
+- `isProcessing` is gone; busy state is tracked per element.
+- `attach()` uses event delegation, so elements added later work automatically.
+
+## License
+
+MIT © 2024 [Mr Akshay Shinde](https://github.com/mraxays)
